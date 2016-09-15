@@ -3,6 +3,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <asm/uaccess.h>
+#include <linux/slab.h>
 
 
 #define NFR 3                   /* Number of /proc files for reading */
@@ -40,49 +41,51 @@ static int hello_proc_open(struct inode *inode, struct  file *file) {
 //	return 0;
 //}
 
-static char test[] = "testing";
+int len,temp;
+char *test;
 
 ssize_t my_write(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
 {
-    int pos;
-    int size;
+    int i;
+    if ( len < 0 )
+        return -EINVAL;
+        
+    i = 1 + strlen(test);
+    if ( i > len )
+        i = len;
+        
     
-    pos = *offset;
-    size = 32;
+    if (copy_from_user(test,buf,i) )
+        return -EFAULT;
+        
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    printk(KERN_INFO "buf = '%s'", buf );
+    printk(KERN_INFO "text = '%s'", test);
     
-    if (pos >= size) pos = size;
-    if ((pos + len) >= size) len = (size - pos) - 1;
-    /* copy count from a user space buffer to the kernel buffer */
-    /* copy_from_user returns 0 on success */                    
-    if (copy_from_user(test,buf,len))               
-       return -EFAULT;  
-    pos += len;
-    //filp->offset = pos;  // Note Deprecated                    
-    *offset = pos; // new for 2.6 Kernel   
-    return len;
+    return i;
 }
 
-ssize_t my_read(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
+ssize_t my_read(struct file* filp, char __user* buf, size_t len, loff_t* offset)
 {
+    int i;
+    if ( len < 0 )
+        return -EINVAL;
+        
+    //down_read(&sem1);
+    i = 1 + strlen(test);
+    if (i > len)
+        i = len;
     
-    int pos;
-    int size;
+    if (copy_to_user(buf,test, i))
+        return -EFAULT;
     
-    pos = *offset;
-    size = 32;
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    printk(KERN_INFO "buf = '%s'", buf );
+    printk(KERN_INFO "text = '%s'", test);
     
-    if (pos >= size) pos = size - 1;
-    if ((pos + len) >= size) len = (size - pos) - 1;
     
-     /* copy count from kernel buffer to user space buffer */            
-     /* copy_to_user returns 0 on success */                             
-     if (copy_to_user(buf,(void*)test,len))                        
-        return -EFAULT;                                                  
-     pos += len;                                                       
-     //filep->f_pos = pos; // Note this is deprecated                            
-     *offset = len;  // new for 2.6 Kernel                                
+    return 0;    
     
-    return 0;
 }
 
 /* Functions for output files ends here */
@@ -145,6 +148,8 @@ static int __init proc_calc_init(void) {
             printk(KERN_INFO "File /proc/%s created\n", an[i]);
         }
     }
+    
+    test = kmalloc(sizeof(int), GFP_KERNEL);
     
     return 0;
 }
