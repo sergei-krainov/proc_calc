@@ -6,11 +6,13 @@
 #include <linux/slab.h>
 #include <linux/ctype.h>
 
+MODULE_LICENSE("GPL");
+
 
 #define NFR 2                   /* Number of /proc files for writing, operators */
 #define NFO 1                   /* Number of /proc files for writing, operand */
 #define NFW 1                   /* Number of /proc files for reading */
-#define NFA (NFR + NFO + NFW)         /* Number of all /proc files to be created */
+#define NFA (NFR + NFO + NFW)   /* Number of all /proc files to be created */
 
 #define PF1 "operator1"         /* Proc file names */
 #define PF2 "operator2"
@@ -29,17 +31,18 @@ int var2;
 int result;
 char operand;
 
+char *tmp;
 
 struct proc_dir_entry *our_proc_file;
 
 /* Functions for output files starts here */
 
-static int hello_proc_show(struct seq_file *m, void *v) {
-    //seq_printf(m, "%d op %d\n", var1, var2);
+static int proc_show_result(struct seq_file *m, void *v) {
     result = 0;
     
     if (operand == 0) {
         seq_printf(m, "Empty or incorrect operand. Processing stopped\n");
+        return 0;
     }
     
     switch (operand) {
@@ -54,7 +57,7 @@ static int hello_proc_show(struct seq_file *m, void *v) {
         break;
     case '/':
         if ( var2 == 0 ) {
-            seq_printf(m, "You can't delete by zero\n");
+            seq_printf(m, "You can't devide by zero\n");
         }
         else {
             result = var1 / var2;
@@ -67,20 +70,19 @@ static int hello_proc_show(struct seq_file *m, void *v) {
     return 0;
 }
 
-static int hello_proc_open(struct inode *inode, struct  file *file) {
-    return single_open(file, hello_proc_show, NULL);
+static int open_proc_file(struct inode *inode, struct  file *file) {
+    return single_open(file, proc_show_result, NULL);
 }
 
-//ssize_t read_not_permitted(struct file *filp, char __user *buffer, size_t length, loff_t *offset) {
-//	printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
-//    printk(KERN_INFO "Read operation is not permitted for this file\n");
-//	return 0;
-//}
+ssize_t write_not_permitted(struct file *filp, const char __user *buffer, size_t length, loff_t *offset) {
+	printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    printk(KERN_INFO "Write operation is not permitted for this file\n");
+	return length;
+}
 
-int len,temp;
-char *test;
-//test = kmalloc(sizeof(int), GFP_KERNEL);
-const char *tmp = "test1";
+/* Functions for output files ends here */
+
+/* Functions for input files starts here */
 
 ssize_t my_write_op1(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
 {
@@ -129,33 +131,6 @@ ssize_t my_write_operand(struct file* filp, const char __user* buf, size_t len, 
     return len;
 }
 
-ssize_t my_read(struct file* filp, char __user* buf, size_t len, loff_t* offset)
-{
-    int i;
-    if ( len < 0 )
-        return -EINVAL;
-        
-    //down_read(&sem1);
-    i = 1 + strlen(test);
-    if (i > len)
-        i = len;
-    
-    if (copy_to_user(buf,test, i))
-        return -EFAULT;
-    
-    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
-    printk(KERN_INFO "buf = '%s'", buf );
-    printk(KERN_INFO "text = '%s'", test);
-    
-    
-    return 0;    
-    
-}
-
-/* Functions for output files ends here */
-
-/* Functions for input files starts here */
-
 ssize_t read_not_permitted(struct file *filp, char __user *buffer, size_t length, loff_t *offset) {
 	printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
     printk(KERN_INFO "Read operation is not permitted for this file\n");
@@ -166,15 +141,16 @@ ssize_t read_not_permitted(struct file *filp, char __user *buffer, size_t length
 
 static const struct file_operations proc_fops_output = {
     .owner = THIS_MODULE,
-    .open = hello_proc_open,
+    .open = open_proc_file,
     .read = seq_read,
+    .write = write_not_permitted,
     .llseek = seq_lseek,
     .release = single_release,
 };
 
 static const struct file_operations proc_fops_input_op1 = {
     .owner = THIS_MODULE,
-    .open = hello_proc_open,
+    .open = open_proc_file,
     .read = read_not_permitted,
     .write  = my_write_op1,
     .llseek = seq_lseek,
@@ -183,7 +159,7 @@ static const struct file_operations proc_fops_input_op1 = {
 
 static const struct file_operations proc_fops_input_op2 = {
     .owner = THIS_MODULE,
-    .open = hello_proc_open,
+    .open = open_proc_file,
     .read = read_not_permitted,
     .write  = my_write_op2,
     .llseek = seq_lseek,
@@ -192,15 +168,17 @@ static const struct file_operations proc_fops_input_op2 = {
 
 static const struct file_operations proc_fops_input_operand = {
     .owner = THIS_MODULE,
-    .open = hello_proc_open,
+    .open = open_proc_file,
     .read = read_not_permitted,
     .write  = my_write_operand,
     .llseek = seq_lseek,
     .release = single_release,
 };
 
-static int __init proc_calc_init(void) {
+static int __init proc_calc_init(void) {    
     short int i;
+    
+    printk(KERN_INFO "Module proc_calc loaded\n");
     
     /* Creating devices for input */
     /* We will write data to them */
@@ -244,7 +222,7 @@ static int __init proc_calc_init(void) {
         }
     }
     
-    test = kmalloc(sizeof(int), GFP_KERNEL);
+    tmp = kmalloc(sizeof(int), GFP_KERNEL);
     
     return 0;
 }
@@ -254,9 +232,11 @@ static void __exit proc_calc_exit(void) {
     
     for (i=0; i < NFA; i++) {
         remove_proc_entry(an[i], NULL);
+        printk(KERN_INFO "File /proc/%s deleted\n", an[i]);
     }
+    
+    printk(KERN_INFO "Module proc_calc unloaded\n");
 }
 
-MODULE_LICENSE("GPL");
 module_init(proc_calc_init);
 module_exit(proc_calc_exit);
