@@ -43,26 +43,20 @@ static int hello_proc_open(struct inode *inode, struct  file *file) {
 
 int len,temp;
 char *test;
+//test = kmalloc(sizeof(int), GFP_KERNEL);
+const char *tmp = "test1";
+int var1;
 
 ssize_t my_write(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
 {
-    int i;
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
     if ( len < 0 )
         return -EINVAL;
-        
-    i = 1 + strlen(test);
-    if ( i > len )
-        i = len;
-        
     
-    if (copy_from_user(test,buf,i) )
-        return -EFAULT;
-        
-    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
-    printk(KERN_INFO "buf = '%s'", buf );
-    printk(KERN_INFO "text = '%s'", test);
+    var1 = simple_strtoul(buf, 0, 0);    
+    printk(KERN_INFO "var1 = %d\n", var1 );
     
-    return i;
+    return len;
 }
 
 ssize_t my_read(struct file* filp, char __user* buf, size_t len, loff_t* offset)
@@ -135,7 +129,7 @@ static int __init proc_calc_init(void) {
         }
     }
     
-    /* Creating devices for input */
+    /* Creating devices for output */
     /* We will read data from them */
     for (; i < NFA; i++) {
         our_proc_file = proc_create(an[i], 0, NULL, &proc_fops_output);
