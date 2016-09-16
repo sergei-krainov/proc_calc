@@ -116,8 +116,6 @@ ssize_t my_write_operand(struct file* filp, const char __user* buf, size_t len, 
     if ( len < 0 )
         return -EINVAL;
      
-    for (i = 0; isspace(buf[i]); i++)
-        ;
     while (isspace(buf[i]))
         i++;
     operand = buf[i];
