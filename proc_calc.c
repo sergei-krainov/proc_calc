@@ -4,11 +4,13 @@
 #include <linux/seq_file.h>
 #include <asm/uaccess.h>
 #include <linux/slab.h>
+#include <linux/ctype.h>
 
 
-#define NFR 3                   /* Number of /proc files for reading */
-#define NFW 1                   /* Number of /proc files for writing */
-#define NFA (NFR + NFW)         /* Number of all /proc files to be created */
+#define NFR 2                   /* Number of /proc files for writing, operators */
+#define NFO 1                   /* Number of /proc files for writing, operand */
+#define NFW 1                   /* Number of /proc files for reading */
+#define NFA (NFR + NFO + NFW)         /* Number of all /proc files to be created */
 
 #define PF1 "operator1"         /* Proc file names */
 #define PF2 "operator2"
@@ -22,12 +24,46 @@ struct proc_dir_entry *f2;
 struct proc_dir_entry *f3;
 struct proc_dir_entry *f4;
 
+int var1;
+int var2;
+int result;
+char operand;
+
+
 struct proc_dir_entry *our_proc_file;
 
 /* Functions for output files starts here */
 
 static int hello_proc_show(struct seq_file *m, void *v) {
-    seq_printf(m, "Hello proc!\n");
+    //seq_printf(m, "%d op %d\n", var1, var2);
+    result = 0;
+    
+    if (operand == 0) {
+        seq_printf(m, "Empty or incorrect operand. Processing stopped\n");
+    }
+    
+    switch (operand) {
+    case '+':
+        result = var1 + var2;
+        break;
+    case '-':
+        result = var1 - var2;
+        break;
+    case '*':
+        result = var1 * var2;
+        break;
+    case '/':
+        if ( var2 == 0 ) {
+            seq_printf(m, "You can't delete by zero\n");
+        }
+        else {
+            result = var1 / var2;
+        }
+        break;
+    }
+    
+    seq_printf(m, "%d\n", result);
+    
     return 0;
 }
 
@@ -45,9 +81,8 @@ int len,temp;
 char *test;
 //test = kmalloc(sizeof(int), GFP_KERNEL);
 const char *tmp = "test1";
-int var1;
 
-ssize_t my_write(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
+ssize_t my_write_op1(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
 {
     printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
     if ( len < 0 )
@@ -55,6 +90,41 @@ ssize_t my_write(struct file* filp, const char __user* buf, size_t len, loff_t* 
     
     var1 = simple_strtoul(buf, 0, 0);    
     printk(KERN_INFO "var1 = %d\n", var1 );
+    
+    return len;
+}
+
+ssize_t my_write_op2(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
+{
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    if ( len < 0 )
+        return -EINVAL;
+    
+    var2 = simple_strtoul(buf, 0, 0);    
+    printk(KERN_INFO "var2 = %d\n", var2 );
+    
+    return len;
+}
+
+ssize_t my_write_operand(struct file* filp, const char __user* buf, size_t len, loff_t* offset)
+{
+    int i = 0;
+    
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    if ( len < 0 )
+        return -EINVAL;
+     
+    for (i = 0; isspace(buf[i]); i++)
+        ;
+    while (isspace(buf[i]))
+        i++;
+    operand = buf[i];
+    
+    if ( operand != '+' && operand != '-' && operand != '*' && operand != '/' ) {
+        operand = 0;
+    }
+        
+    printk(KERN_INFO "operand = %c\n", operand );
     
     return len;
 }
@@ -97,17 +167,34 @@ ssize_t read_not_permitted(struct file *filp, char __user *buffer, size_t length
 static const struct file_operations proc_fops_output = {
     .owner = THIS_MODULE,
     .open = hello_proc_open,
-    //.read = seq_read,
-    .read = my_read,
-    .write  = my_write,
+    .read = seq_read,
     .llseek = seq_lseek,
     .release = single_release,
 };
 
-static const struct file_operations proc_fops_input = {
+static const struct file_operations proc_fops_input_op1 = {
     .owner = THIS_MODULE,
     .open = hello_proc_open,
     .read = read_not_permitted,
+    .write  = my_write_op1,
+    .llseek = seq_lseek,
+    .release = single_release,
+};
+
+static const struct file_operations proc_fops_input_op2 = {
+    .owner = THIS_MODULE,
+    .open = hello_proc_open,
+    .read = read_not_permitted,
+    .write  = my_write_op2,
+    .llseek = seq_lseek,
+    .release = single_release,
+};
+
+static const struct file_operations proc_fops_input_operand = {
+    .owner = THIS_MODULE,
+    .open = hello_proc_open,
+    .read = read_not_permitted,
+    .write  = my_write_operand,
     .llseek = seq_lseek,
     .release = single_release,
 };
@@ -117,8 +204,10 @@ static int __init proc_calc_init(void) {
     
     /* Creating devices for input */
     /* We will write data to them */
+    /* Two files for operators */
     for (i=0; i < NFR; i++) {
-        our_proc_file = proc_create(an[i], 0, NULL, &proc_fops_input);
+        our_proc_file = proc_create(an[i], 0, NULL, (i == 0) ? &proc_fops_input_op1
+                                                             : &proc_fops_input_op2 );
         
         if (our_proc_file == NULL) {
         printk(KERN_INFO "Procfs is null\n");
@@ -128,6 +217,18 @@ static int __init proc_calc_init(void) {
             printk(KERN_INFO "File /proc/%s created\n", an[i]);
         }
     }
+    
+    /* One file for operand */
+    our_proc_file = proc_create(an[i], 0, NULL, &proc_fops_input_operand);
+    
+    if (our_proc_file == NULL) {
+    printk(KERN_INFO "Procfs is null\n");
+    }
+    else {
+        printk(KERN_INFO "Procfs is not null\n");
+        printk(KERN_INFO "File /proc/%s created\n", an[i]);
+    }
+    i++;
     
     /* Creating devices for output */
     /* We will read data from them */
