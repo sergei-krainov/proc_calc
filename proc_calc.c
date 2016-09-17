@@ -21,14 +21,9 @@ MODULE_LICENSE("GPL");
 
 char *an[4] = {PF1, PF2, PF3, PF4};
 
-struct proc_dir_entry *f1;
-struct proc_dir_entry *f2;
-struct proc_dir_entry *f3;
-struct proc_dir_entry *f4;
-
-int var1;
-int var2;
-int result;
+int var1 = 0;
+int var2 = 0;
+int result = 0;
 char operand;
 
 char *tmp;
@@ -75,9 +70,9 @@ static int open_proc_file(struct inode *inode, struct  file *file) {
 }
 
 ssize_t write_not_permitted(struct file *filp, const char __user *buffer, size_t length, loff_t *offset) {
-	printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
     printk(KERN_INFO "Write operation is not permitted for this file\n");
-	return length;
+    return length;
 }
 
 /* Functions for output files ends here */
@@ -90,7 +85,7 @@ ssize_t my_write_op1(struct file* filp, const char __user* buf, size_t len, loff
     if ( len < 0 )
         return -EINVAL;
     
-    var1 = simple_strtoul(buf, 0, 0);    
+    var1 = simple_strtoll(buf, 0, 0);
     printk(KERN_INFO "var1 = %d\n", var1 );
     
     return len;
@@ -102,7 +97,7 @@ ssize_t my_write_op2(struct file* filp, const char __user* buf, size_t len, loff
     if ( len < 0 )
         return -EINVAL;
     
-    var2 = simple_strtoul(buf, 0, 0);    
+    var2 = simple_strtoll(buf, 0, 0);    
     printk(KERN_INFO "var2 = %d\n", var2 );
     
     return len;
@@ -130,9 +125,9 @@ ssize_t my_write_operand(struct file* filp, const char __user* buf, size_t len, 
 }
 
 ssize_t read_not_permitted(struct file *filp, char __user *buffer, size_t length, loff_t *offset) {
-	printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
+    printk(KERN_INFO "Entering function %s\n", __FUNCTION__ );
     printk(KERN_INFO "Read operation is not permitted for this file\n");
-	return 0;
+    return 0;
 }
 
 /* Functions for input files ends here */
